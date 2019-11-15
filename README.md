@@ -53,13 +53,13 @@ The route can be obtained using some greedy algorithm. For example: https://gith
 |# of Points |TSP Solver |Average Distance |
 |--- |--- |--- |
 |20|dmishin's|4.004|
-|20|R&R|3.822|
+||R&R|3.822|
 |50|dmishin's|6.094|
-|50|R&R|5.676|
+||R&R|5.676|
 |100|dmishin's|8.233|
-|100|R&R|7.671|
-|200|dmishin's|8.2326|
-|200|R&R|7.6707|
+||R&R|7.671|
+|200|dmishin's|11.475|
+||R&R|10.801|
 
 If the init_route is None, then it will be initialized with a random route.
 
