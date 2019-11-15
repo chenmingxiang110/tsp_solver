@@ -1,5 +1,5 @@
 # Travelling Salesman Problem (TSP) Solver Using Iterations
-Solving tsp (Travelling Salesman Problem) using ruin &amp; recreate method.
+Solving tsp (Travelling Salesman Problem) using ruin &amp; recreate （R &amp; R） method.
 
 The following library is required to use the script:
 - Numpy
