@@ -48,7 +48,9 @@ You can also input a customized distance matrix. It do not need to follow the tr
 
 2. Initialize with a initial route. 
 
-The route can be obtained using some greedy algorithm. For example: https://github.com/dmishin/tsp-solver. If the init_route is None, then it will be initialized with a random route.
+The route can be obtained using some greedy algorithm. For example: https://github.com/dmishin/tsp-solver. But the final result will be much better especially when number of vertices is large. In my tests, the average improvement comparing to dmishin's result is as follows:
+
+If the init_route is None, then it will be initialized with a random route.
 
 3. Iteration.
 
