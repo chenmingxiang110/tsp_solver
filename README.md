@@ -46,8 +46,14 @@ D = [[0,3,4],
 
 You can also input a customized distance matrix. It do not need to follow the triangle rule, and the distance from A to B and B to A can be different.
 
-2. Initialize with a initial route. The route can be obtained using some greedy algorithm. For example: https://github.com/dmishin/tsp-solver. If the init_route is None, then it will be initialized with a random route.
+2. Initialize with a initial route. 
 
-3. If back_to_origin is set to true, then the route should start from the first point, and going back to the point after traveled all the nodes. If back_to_origin is set to false, then the starting point is the first one, and the end point is the last one. The algorithm will optimize the route through iteration with ruin & recreate strategy, which means, in every single iteration, delete some nodes from the route and insert them back using some sorting mechanism. The main idea of this algorithm is similar to this paper: Slack Induction by String Removals for Vehicle Routing Problems, https://lirias.kuleuven.be/handle/123456789/624431.
+The route can be obtained using some greedy algorithm. For example: https://github.com/dmishin/tsp-solver. If the init_route is None, then it will be initialized with a random route.
 
-4. After iteration, in case there is some better local solutions to some sub-routes, the algorithm will break the route into pieces and try to do some quick iterations. If local_search_iter is set to 0, then this step will be skipped.
+3. Iteration.
+
+If back_to_origin is set to true, then the route should start from the first point, and going back to the point after traveled all the nodes. If back_to_origin is set to false, then the starting point is the first one, and the end point is the last one. The algorithm will optimize the route through iteration with ruin & recreate strategy, which means, in every single iteration, delete some nodes from the route and insert them back using some sorting mechanism. The main idea of this algorithm is similar to this paper: Slack Induction by String Removals for Vehicle Routing Problems, https://lirias.kuleuven.be/handle/123456789/624431.
+
+4. Optimization.
+
+After iteration, in case there is some better local solutions to some sub-routes, the algorithm will break the route into pieces and try to do some quick iterations. If local_search_iter is set to 0, then this step will be skipped.
