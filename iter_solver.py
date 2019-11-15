@@ -284,6 +284,8 @@ def auto_solver(distance_matrix,
     assert len(distance_matrix.shape)==2
     assert distance_matrix.shape[0]==distance_matrix.shape[1]
     assert distance_matrix.shape[0]>2
+    if verbose_step is not None:
+        assert verbose_step>=1
     
     if back_to_origin:
         d, r = sisr_tsp(distance_matrix, n_iter=n_iter,
