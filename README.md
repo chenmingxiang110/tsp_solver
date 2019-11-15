@@ -48,7 +48,18 @@ You can also input a customized distance matrix. It do not need to follow the tr
 
 2. Initialize with a initial route. 
 
-The route can be obtained using some greedy algorithm. For example: https://github.com/dmishin/tsp-solver. But the final result will be much better especially when number of vertices is large. In my tests, the average improvement comparing to dmishin's result is as follows:
+The route can be obtained using some greedy algorithm. For example: https://github.com/dmishin/tsp-solver. But the final result will be much better especially when number of vertices is large. In my tests, the average improvement (in 1000 iterations) comparing to dmishin's result is as follows (the coordinates of points are initialized randomly between 0 and 1):
+
+|# of Points |TSP Solver |Average Distance |
+|--- |--- |--- |
+|20|dmishin's|4.004|
+|20|R&R|3.822|
+|50|dmishin's|6.094|
+|50|R&R|5.676|
+|100|dmishin's|8.233|
+|100|R&R|7.671|
+|200|dmishin's|8.2326|
+|200|R&R|7.6707|
 
 If the init_route is None, then it will be initialized with a random route.
 
