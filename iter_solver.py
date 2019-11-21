@@ -45,19 +45,23 @@ def sisr_tsp_e2e(distance_matrix,
                                                      replace=False, p=ab_scores))
         return [absent_nodes[i] for i in absent_nodes_indices]
     
-    def adding_node(current_route, node, distance_matrix):
-        cost = distance_matrix[current_route[0],node] + \
-               distance_matrix[node,current_route[1]] - \
-               distance_matrix[current_route[0],current_route[1]]
+    def adding_node(curr_r, node, dist_m):
+        cost = dist_m[curr_r[0],node] + dist_m[node,curr_r[1]] - dist_m[curr_r[0],curr_r[1]]
         index = 1
-        for i in range(2,len(current_route)):
-            current_cost = distance_matrix[current_route[i-1],node] + \
-                           distance_matrix[node,current_route[i]] - \
-                           distance_matrix[current_route[i-1],current_route[i]]
-            if current_cost<cost:
-                cost = current_cost
-                index = i
-        return current_route[:index]+[node]+current_route[index:]
+        curr_c = dist_m[curr_r[1:-1],node]+dist_m[node,curr_r[2:]]-dist_m[curr_r[1:-1],curr_r[2:]]
+        index_c = np.argmin(curr_c)
+        if curr_c[index_c]>cost:
+            return curr_r[:1]+[node]+curr_r[1:]
+        return curr_r[:(index_c+2)]+[node]+curr_r[(index_c+2):]
+    
+#         for i in range(2,len(current_route)):
+#             current_cost = distance_matrix[current_route[i-1],node] + \
+#                            distance_matrix[node,current_route[i]] - \
+#                            distance_matrix[current_route[i-1],current_route[i]]
+#             if current_cost<cost:
+#                 cost = current_cost
+#                 index = i
+#         return current_route[:index]+[node]+current_route[index:]
     
     ###########################################################################
     
@@ -129,21 +133,14 @@ def sisr_tsp(distance_matrix,
                                                      replace=False, p=ab_scores))
         return [absent_nodes[i] for i in absent_nodes_indices]
 
-    def adding_node(current_route, node, distance_matrix):
-        cost = distance_matrix[current_route[-1],node] + \
-               distance_matrix[node,current_route[0]] - \
-               distance_matrix[current_route[-1],current_route[0]]
+    def adding_node(curr_r, node, dist_m):
+        cost = dist_m[curr_r[-1],node] + dist_m[node,curr_r[0]] - dist_m[curr_r[-1],curr_r[0]]
         index = 0
-        for i in range(1,len(current_route)):
-            current_cost = distance_matrix[current_route[i-1],node] + \
-                           distance_matrix[node,current_route[i]] - \
-                           distance_matrix[current_route[i-1],current_route[i]]
-            if current_cost<cost:
-                cost = current_cost
-                index = i
-        if index == 0:
-            return [node]+current_route
-        return current_route[:index]+[node]+current_route[index:]
+        curr_c = dist_m[curr_r[:-1],node]+dist_m[node,curr_r[1:]]-dist_m[curr_r[:-1],curr_r[1:]]
+        index_c = np.argmin(curr_c)
+        if curr_c[index_c]>cost:
+            return [node]+curr_r
+        return curr_r[:(index_c+1)]+[node]+curr_r[(index_c+1):]
 
     ###########################################################################
 
@@ -160,25 +157,40 @@ def sisr_tsp(distance_matrix,
     temperature = init_T
     dropRate = init_dropRate
     recorded_dists = []
+    scores = get_scores()
 
     for i_iter in range(n_iter):
         if verbose_step is not None and (i_iter+1)%verbose_step==0:
             print(i_iter+1, np.round((i_iter+1)/n_iter*100,3), "%:", best_distance)
-        scores = get_scores()
+            
+        # start_time = time.time()
         n_destroy = min(distance_matrix.shape[0]-1, max(1, int(dropRate*distance_matrix.shape[0])))
-        absent_nodes, current_route = destroy_nodes(n_destroy, last_route, scores)
-        sorted_absent_nodes = sort_absent_nodes(absent_nodes, scores)
-        for node in sorted_absent_nodes:
-            current_route = adding_node(current_route, node, distance_matrix)
-        current_distance = get_route_distance(distance_matrix, current_route+[current_route[0]])
+        # print(time.time()-start_time)
+        
+        # start_time = time.time()
+        absent_nodes, curr_r = destroy_nodes(n_destroy, last_route, scores)
+        # print(time.time()-start_time)
+        
+        # start_time = time.time()
+        s_nodes = sort_absent_nodes(absent_nodes, scores)
+        # print(time.time()-start_time)
+        
+        # start_time = time.time()
+        for node in s_nodes:
+            curr_r = adding_node(curr_r, node, distance_matrix)
+        # print(time.time()-start_time)
+        
+        # start_time = time.time()
+        current_distance = get_route_distance(distance_matrix, curr_r+[curr_r[0]])
         if record: recorded_dists.append(current_distance)
         if current_distance<(best_distance-temperature*np.log(np.random.random())):
             if current_distance<best_distance:
                 best_distance = current_distance
-                best_route = current_route
-            last_route = current_route
+                best_route = curr_r
+            last_route = curr_r
         temperature*=alpha_T
         dropRate*=alpha_drop
+        # print(time.time()-start_time)
     if verbose_step is not None: print(i_iter+1, "100 %:", best_distance)
 
     bri = best_route.index(0)
@@ -204,7 +216,7 @@ def optimize_route(distance_matrix, route, n_iter, verbose=False):
         i_unchanged = 0
         current_n_iter = int(max(2*n_iter/multiple, lower_bnd))
         while i_unchanged<(multiple*2):
-            if verbose: print("Optimizing:", route_length, i_unchanged+1, '/', multiple*2)
+            if verbose: print("Optimizing:", route_length, i_unchanged+1, '/', multiple*2, best_distance)
             start = int(route_length/2)
             best_route = (best_route+best_route)[start:start+distance_matrix.shape[0]]
             sub_route = np.array(best_route[:route_length])
@@ -241,7 +253,7 @@ def optimize_route_e2e(distance_matrix, route, n_iter, verbose=False):
         gap = int(max(route_length/2,1))
         flag = True
         while flag:
-            if verbose: print("Optimizing:", route_length, start, "isChanged", isChanged)
+            if verbose: print("Optimizing:", route_length, start, "isChanged", isChanged, best_distance)
             if (start+route_length)>len(best_route):
                 end = len(best_route)
                 flag = False
@@ -291,11 +303,11 @@ def auto_solver(distance_matrix,
         d, r = sisr_tsp(distance_matrix, n_iter=n_iter,
                         init_route=init_route, verbose_step=verbose_step)
         if local_search_iter>0:
-            d, r = optimize_route(distance_matrix, r, n_iter, verbose_step is not None)
+            d, r = optimize_route(distance_matrix, r, local_search_iter, verbose_step is not None)
         return d, r
     else:
         d, r = sisr_tsp_e2e(distance_matrix, n_iter=n_iter,
                             init_route=init_route, verbose_step=verbose_step)
         if local_search_iter>0:
-            d, r = optimize_route_e2e(distance_matrix, r, n_iter, verbose_step is not None)
+            d, r = optimize_route_e2e(distance_matrix, r, local_search_iter, verbose_step is not None)
         return d, r
