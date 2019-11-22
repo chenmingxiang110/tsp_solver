@@ -1,4 +1,5 @@
 import time
+import copy
 import numpy as np
 
 def calculate_distance_matrix(coords):
@@ -12,11 +13,13 @@ def sisr_vrp(data,
              vehicle_capcity,
              n_iter,
              n_iter_fleet=None,
+             fleet_gap=None,
              init_T=100.0,
              final_T=1.0,
              c_bar=10.0,
              L_max=10.0,
              m_alpha=0.01,
+             obj_n_routes=None,
              init_route=None,
              verbose_step=None,
              test_obj=None):
@@ -47,54 +50,7 @@ def sisr_vrp(data,
             neighbours.append([x[0] for x in sorted_index_dist])
         return neighbours
     
-    def init_SWD(data, distance_matrix, best_routes):
-        PF_S = np.zeros(distance_matrix.shape[0])
-        PF_W = np.zeros(distance_matrix.shape[0])
-        PF_D = np.zeros(distance_matrix.shape[0])
-        for r in best_routes:
-            last_node = 0
-            t = 0
-            for ri in r:
-                t+=data[last_node][-1]+distance_matrix[last_node,ri]
-                if t<data[ri][3]:
-                    PF_W[ri] = data[ri][3]-t
-                    PF_D[ri] = data[ri][3]
-                    t = data[ri][3]
-                else:
-                    PF_D[ri] = t
-                last_node = ri
-            t+=data[last_node][-1]+distance_matrix[last_node,0]
-            S_last = data[0][4]-t
-            W_last = 0
-            for i in range(len(r)-1,-1,-1):
-                S_last = min(S_last+W_last, data[r[i]][4]-PF_D[r[i]])
-                W_last = PF_W[r[i]]
-                PF_S[r[i]] = S_last
-        return PF_S, PF_W, PF_D
-    
-    def update_PF_Params(PF_Params, new_r):
-        PF_S, PF_W, PF_D = PF_Params
-        last_node = 0
-        t = 0
-        for ri in new_r:
-            t+=data[last_node][-1]+distance_matrix[last_node,ri]
-            if t<data[ri][3]:
-                PF_W[ri] = data[ri][3]-t
-                PF_D[ri] = data[ri][3]
-                t = data[ri][3]
-            else:
-                PF_D[ri] = t
-            last_node = ri
-        t+=data[last_node][-1]+distance_matrix[last_node,0]
-        S_last = data[0][4]-t
-        W_last = 0
-        for i in range(len(new_r)-1,-1,-1):
-            S_last = min(S_last+W_last, data[new_r[i]][4]-PF_D[new_r[i]])
-            W_last = PF_W[new_r[i]]
-            PF_S[new_r[i]] = S_last
-        return PF_S, PF_W, PF_D
-    
-    def ruin(last_routes, neighbours, PF_Params, in_absents=None):
+    def ruin(last_routes, neighbours, in_absents=None, isHugeRuin=False):
 
         def remove_nodes(tr, l_t, c, m):
             def string_removal(tr, l_t, c):
@@ -125,14 +81,13 @@ def sisr_vrp(data,
                 if c in last_routes[i]: return i
             return None
         
-        def routes_summary(last_routes, absents, PF_Params):
+        def routes_summary(last_routes, absents):
             current_routes = []
             for r in last_routes:
                 new_r = [x for x in r if x not in absents]
                 if len(new_r)>0:
                     current_routes.append(new_r)
-                    PF_Params = update_PF_Params(PF_Params, new_r)
-            return current_routes, PF_Params
+            return current_routes
         
         m = 1
         l_s_max = min(L_max, np.mean([len(x) for x in last_routes]))
@@ -148,22 +103,19 @@ def sisr_vrp(data,
             if len(ruined_t_indices) >= k_s: break
             if c not in absents and c!=0:
                 t = find_t(last_routes, c)
-                # 用于查错，可以删掉
-                # if t is None:
-                #     print("last_routes", last_routes)
-                #     print("absents", absents)
-                #     print("in_absents", in_absents)
-                #     print("c", c)
                 if t in ruined_t_indices: continue
-                l_t_max = min(l_s_max, len(last_routes[t]))
-                l_t = int(np.random.random()*l_t_max+1.0)
-                m, newly_removed = remove_nodes(last_routes[t], l_t, c, m)
+                if isHugeRuin and np.random.random()>0.5:
+                    newly_removed = last_routes[t]
+                else:
+                    l_t_max = min(l_s_max, len(last_routes[t]))
+                    l_t = int(np.random.random()*l_t_max+1.0)
+                    m, newly_removed = remove_nodes(last_routes[t], l_t, c, m)
                 absents = absents+newly_removed
                 ruined_t_indices.add(t)
-        current_routes, PF_Params = routes_summary(last_routes, absents, PF_Params)
-        return current_routes, absents, PF_Params
+        current_routes = routes_summary(last_routes, absents)
+        return current_routes, absents
     
-    def recreate(data, distance_matrix, current_routes, absents, PF_Params, last_length=None):
+    def recreate(data, distance_matrix, current_routes, absents, last_length=None):
         
         def checkValid_legacy(complete_r):
             t_current = 0
@@ -192,16 +144,14 @@ def sisr_vrp(data,
                 tmp_t+=distance_matrix[complete_r[i]][complete_r[i+1]]
             return valids
         
-        def route_add(current_routes, c, adding_position, PF_Params):
+        def route_add(current_routes, c, adding_position):
             if adding_position[0]==-1:
                 current_routes = current_routes+[[c]]
-                PF_Params = update_PF_Params(PF_Params, [c])
             else:
                 chg_r = current_routes[adding_position[0]]
                 new_r = chg_r[:adding_position[1]]+[c]+chg_r[adding_position[1]:]
                 current_routes[adding_position[0]] = new_r
-                PF_Params = update_PF_Params(PF_Params, new_r)
-            return current_routes, PF_Params
+            return current_routes
         
         # 1. Sort the absent nodes with some methods, here only use random as a placeholder
         absents = [absents[i] for i in np.random.choice(len(absents), len(absents), replace=False)]
@@ -218,32 +168,31 @@ def sisr_vrp(data,
                 if last_length is not None and len(current_routes)>=last_length:
                     rests.append(c)
                     continue
-#                 adding_position = (-1,-1,1)
-#             else:
-#                 adding_position = sorted(probable_place, key=lambda x: x[-1])[0]
-            probable_place.append((-1,-1,2*distance_matrix[0,c]))
-            adding_position = sorted(probable_place, key=lambda x: x[-1])[0]
-            current_routes, PF_Params = route_add(current_routes, c, adding_position, PF_Params)
-        if last_length is not None: return current_routes, rests, PF_Params
-        return current_routes, PF_Params
+                adding_position = (-1,-1,1)
+            else:
+                adding_position = sorted(probable_place, key=lambda x: x[-1])[0]
+#             probable_place.append((-1,-1,2*distance_matrix[0,c]))
+#             adding_position = sorted(probable_place, key=lambda x: x[-1])[0]
+            current_routes = route_add(current_routes, c, adding_position)
+        if last_length is not None: return current_routes, rests
+        return current_routes
     
-    def fleet_min(n, data, distance_matrix, neighbours, routes, PF_Params, verbose_step):
+    def fleet_min(n, data, distance_matrix, neighbours, routes, verbose_step):
         absents = []
         absent_c = np.zeros(distance_matrix.shape[0])
         best_routes = copy.deepcopy(routes)
         last_routes = copy.deepcopy(routes)
         for i in range(n):
-            current_routes, new_absents, PF_Params = ruin(last_routes, neighbours, PF_Params, absents)
-            current_routes, new_absents, PF_Params = recreate(data, distance_matrix,
+            current_routes, new_absents = ruin(last_routes, neighbours, absents)
+            current_routes, new_absents = recreate(data, distance_matrix,
                                                               current_routes, new_absents,
-                                                              PF_Params, last_length=len(last_routes))
+                                                              last_length=len(last_routes))
             if len(new_absents)==0:
-                last_routes = copy.deepcopy(current_routes)
-                absents = copy.deepcopy(new_absents)
                 best_routes = copy.deepcopy(current_routes)
-                sumabs = sorted([(t, np.sum(absent_c[t])) for t in last_routes], key=lambda x: x[1])
+                sumabs = sorted([(t, np.sum(absent_c[t])) for t in best_routes], key=lambda x: x[1])
                 absents = sumabs[0][0]
                 last_routes = [x[0] for x in sumabs[1:]]
+                current_routes = copy.deepcopy(last_routes)
             elif len(new_absents)<len(absents) or np.sum(absent_c[new_absents])<np.sum(absent_c[absents]):
                 last_routes = copy.deepcopy(current_routes)
                 absents = copy.deepcopy(new_absents)
@@ -254,8 +203,9 @@ def sisr_vrp(data,
             if verbose_step is not None and (i+1)%verbose_step==0:
                 print("fleet_min", i+1, np.round((i+1)/n*100,4), "%:", len(best_routes))
         if verbose_step is not None and n%verbose_step!=0: print(i+1, "100.0 %:", len(best_routes))
-        return best_routes, PF_Params
+        return best_routes
     
+    if obj_n_routes is not None: assert fleet_gap is not None
     alpha_T = (final_T/init_T)**(1.0/n_iter)
     
     coords = data[:,:2]
@@ -264,18 +214,19 @@ def sisr_vrp(data,
         coord = coords[i]
         distance_matrix[i] = np.sum((coord-coords)**2,axis=1)**0.5
     
-    best_routes = [[i] for i in range(1,len(data))]
+    if init_route is not None:
+        best_routes = copy.deepcopy(init_route)
+    else:
+        best_routes = [[i] for i in range(1,len(data))]
     best_distance = get_routes_distance(distance_matrix, best_routes)
-    last_routes = [[i] for i in range(1,len(data))]
+    last_routes = copy.deepcopy(best_routes)
     last_distance = get_routes_distance(distance_matrix, best_routes)
     neighbours = get_neighbours(distance_matrix)
-    PF_Params = init_SWD(data, distance_matrix, best_routes)
     print(len(best_routes), best_distance)
     
-    if n_iter_fleet is None: n_iter_fleet=int(max(n_iter*0.1, 1))
-    if n_iter_fleet > 0:
-        last_routes, PF_Params = fleet_min(n_iter_fleet, data, distance_matrix, neighbours,
-                                           best_routes, PF_Params, verbose_step)
+#     if n_iter_fleet is None: n_iter_fleet=int(max(n_iter*0.1, 1))
+    if (n_iter_fleet is not None) and (n_iter_fleet > 0):
+        last_routes = fleet_min(n_iter_fleet, data, distance_matrix, neighbours, best_routes, verbose_step)
         last_distance = get_routes_distance(distance_matrix, last_routes)
 
         if last_distance<best_distance:
@@ -285,13 +236,243 @@ def sisr_vrp(data,
     temperature = init_T
     
     for i_iter in range(n_iter):
-        current_routes, absents, PF_Params = ruin(last_routes, neighbours, PF_Params)
-        current_routes, PF_Params = recreate(data, distance_matrix, current_routes, absents, PF_Params)
+        if obj_n_routes is not None and len(last_routes)>obj_n_routes and (i_iter+1)%fleet_gap==0:
+            current_routes = fleet_min(n_iter_fleet, data, distance_matrix, neighbours, last_routes, verbose_step)
+        else:
+            current_routes, absents = ruin(last_routes, neighbours)
+            current_routes = recreate(data, distance_matrix, current_routes, absents)
         
         current_distance = get_routes_distance(distance_matrix, current_routes)
         if len(current_routes)<len(best_routes) or \
            (current_distance<(last_distance-temperature*np.log(np.random.random())) and \
-            len(current_routes)==len(best_routes)):
+            len(current_routes)<=len(best_routes)):
+            
+            if len(current_routes)<len(best_routes) or current_distance<best_distance:
+                best_distance = current_distance
+                best_routes = current_routes
+                if test_obj is not None and best_distance<test_obj:
+                    break
+            last_distance = current_distance
+            last_routes = current_routes
+        temperature*=alpha_T
+        
+        if verbose_step is not None and (i_iter+1)%verbose_step==0:
+            print(i_iter+1, np.round((i_iter+1)/n_iter*100,4), "%:",
+                  len(best_routes), len(last_routes), len(current_routes),
+                  best_distance, last_distance, current_distance)
+    
+    if verbose_step is not None and n_iter%verbose_step!=0: print(i_iter+1, "100.0 %:", best_distance)
+    return best_distance, best_routes
+
+def sisr_cvrp(data,
+              vehicle_capcity,
+              n_iter,
+              n_iter_fleet=None,
+              fleet_gap=None,
+              init_T=100.0,
+              final_T=1.0,
+              c_bar=10.0,
+              L_max=10.0,
+              m_alpha=0.01,
+              obj_n_routes=None,
+              init_route=None,
+              verbose_step=None,
+              test_obj=None):
+    """
+    data: An numpy array with a shape of (N, 3), where N is the number of customers.
+          Each column represents x coord, y coord, demand, ready time, due time, and
+          service time.
+    """
+    
+    def get_route_distance(distance_matrix, route):
+        r = [0]+route+[0]
+        result = np.sum([distance_matrix[r[i]][r[i+1]] for i in range(len(r)-1)])
+        return result
+    
+    def get_routes_distance(distance_matrix, routes):
+        total_distance = 0
+        for route in routes:
+            r = [0]+route+[0]
+            total_distance += np.sum([distance_matrix[r[i],r[i+1]] for i in range(len(r)-1)])
+        return total_distance
+    
+    def get_neighbours(distance_matrix):
+        n_vertices = distance_matrix.shape[0]
+        neighbours = []
+        for i in range(n_vertices):
+            index_dist = [(j, distance_matrix[i][j]) for j in range(n_vertices)]
+            sorted_index_dist = sorted(index_dist, key=lambda x: x[1])
+            neighbours.append([x[0] for x in sorted_index_dist])
+        return neighbours
+    
+    def ruin(last_routes, neighbours, in_absents=None, isHugeRuin=False):
+
+        def remove_nodes(tr, l_t, c, m):
+            def string_removal(tr, l_t, c):
+                i_c = tr.index(c)
+                range1 = max(0, i_c+1-l_t)
+                range2 = min(i_c, len(tr)-l_t)+1
+                start = np.random.randint(range1, range2)
+                return tr[start:start+l_t]
+            def split_removal(tr, l_t, c, m):
+                additional_l = min(m, len(tr)-l_t)
+                l_t_m = l_t+additional_l
+                i_c = tr.index(c)
+                range1 = max(0, i_c+1-l_t_m)
+                range2 = min(i_c, len(tr)-l_t_m)+1
+                start = np.random.randint(range1, range2)
+                potential_removal = tr[start:start+l_t_m]
+                return [potential_removal[i] for i in np.random.choice(l_t_m, l_t, replace=False)]
+            if np.random.random()<0.5:
+                newly_removed = string_removal(tr, l_t, c)
+            else:
+                newly_removed = split_removal(tr, l_t, c, m)
+                if m<(len(tr)-l_t) or np.random.random()>m_alpha:
+                    m+=1
+            return m, newly_removed
+        
+        def find_t(last_routes, c):
+            for i in range(len(last_routes)):
+                if c in last_routes[i]: return i
+            return None
+        
+        def routes_summary(last_routes, absents):
+            current_routes = []
+            for r in last_routes:
+                new_r = [x for x in r if x not in absents]
+                if len(new_r)>0:
+                    current_routes.append(new_r)
+            return current_routes
+        
+        m = 1
+        l_s_max = min(L_max, np.mean([len(x) for x in last_routes]))
+        k_s_max = 4.0*c_bar/(1.0+l_s_max)-1.0
+        k_s = int(np.random.random()*k_s_max+1.0)
+        c_seed = int(np.random.random()*len(data))
+        if in_absents is None:
+            absents = []
+        else:
+            absents = copy.deepcopy(in_absents)
+        ruined_t_indices = set([])
+        for c in neighbours[c_seed]:
+            if len(ruined_t_indices) >= k_s: break
+            if c not in absents and c!=0:
+                t = find_t(last_routes, c)
+                if t in ruined_t_indices: continue
+                if isHugeRuin and np.random.random()>0.5:
+                    newly_removed = last_routes[t]
+                else:
+                    l_t_max = min(l_s_max, len(last_routes[t]))
+                    l_t = int(np.random.random()*l_t_max+1.0)
+                    m, newly_removed = remove_nodes(last_routes[t], l_t, c, m)
+                absents = absents+newly_removed
+                ruined_t_indices.add(t)
+        current_routes = routes_summary(last_routes, absents)
+        return current_routes, absents
+    
+    def recreate(data, dist_m, current_routes, absents, last_length=None):
+        
+        def route_add(dist_m, current_routes, c, adding_position):
+            if adding_position[0]==-1:
+                current_routes = current_routes+[[c]]
+            else:
+                chg_r = current_routes[adding_position[0]]
+                new_r = chg_r[:adding_position[1]]+[c]+chg_r[adding_position[1]:]
+                current_routes[adding_position[0]] = new_r
+            return current_routes
+        
+        # 1. Sort the absent nodes with some methods, here only use random as a placeholder
+        absents = [absents[i] for i in np.random.choice(len(absents), len(absents), replace=False)]
+        if last_length is not None: rests = []
+        for c in absents:
+            probable_place = []
+            for ir,r in enumerate(current_routes):
+                # assert capacity
+                if (np.sum([data[x][2] for x in r])+data[c][2])>vehicle_capcity: continue
+                complete_r = [0]+r+[0]
+                for iri in range(len(r)+1):
+                    probable_place.append((ir,iri,dist_m[iri,c]+dist_m[c,iri+1]-dist_m[iri,iri+1]))
+            if len(probable_place)==0:
+                if last_length is not None and len(current_routes)>=last_length:
+                    rests.append(c)
+                    continue
+                adding_position = (-1,-1,1)
+            else:
+                adding_position = sorted(probable_place, key=lambda x: x[-1])[0]
+#             probable_place.append((-1,-1,2*distance_matrix[0,c]))
+#             adding_position = sorted(probable_place, key=lambda x: x[-1])[0]
+            current_routes = route_add(dist_m, current_routes, c, adding_position)
+        if last_length is not None: return current_routes, rests
+        return current_routes
+    
+    def fleet_min(n, data, distance_matrix, neighbours, routes, verbose_step):
+        absents = []
+        absent_c = np.zeros(distance_matrix.shape[0])
+        best_routes = copy.deepcopy(routes)
+        last_routes = copy.deepcopy(routes)
+        for i in range(n):
+            current_routes, new_absents = ruin(last_routes, neighbours, absents)
+            current_routes, new_absents = recreate(data, distance_matrix,
+                                                              current_routes, new_absents,
+                                                              last_length=len(last_routes))
+            if len(new_absents)==0:
+                best_routes = copy.deepcopy(current_routes)
+                sumabs = sorted([(t, np.sum(absent_c[t])) for t in best_routes], key=lambda x: x[1])
+                absents = sumabs[0][0]
+                last_routes = [x[0] for x in sumabs[1:]]
+                current_routes = copy.deepcopy(last_routes)
+            elif len(new_absents)<len(absents) or np.sum(absent_c[new_absents])<np.sum(absent_c[absents]):
+                last_routes = copy.deepcopy(current_routes)
+                absents = copy.deepcopy(new_absents)
+            if len(new_absents)>0:
+                tmp = np.zeros(absent_c.shape)
+                tmp[new_absents]=1
+                absent_c = absent_c+tmp
+            if verbose_step is not None and (i+1)%verbose_step==0:
+                print("fleet_min", i+1, np.round((i+1)/n*100,4), "%:", len(best_routes))
+        if verbose_step is not None and n%verbose_step!=0: print(i+1, "100.0 %:", len(best_routes))
+        return best_routes
+    
+    alpha_T = (final_T/init_T)**(1.0/n_iter)
+    
+    coords = data[:,:2]
+    distance_matrix = np.zeros([len(coords),len(coords)])
+    for i in range(len(coords)):
+        coord = coords[i]
+        distance_matrix[i] = np.sum((coord-coords)**2,axis=1)**0.5
+    
+    if init_route is not None:
+        best_routes = copy.deepcopy(init_route)
+    else:
+        best_routes = [[i] for i in range(1,len(data))]
+    best_distance = get_routes_distance(distance_matrix, best_routes)
+    last_routes = copy.deepcopy(best_routes)
+    last_distance = get_routes_distance(distance_matrix, best_routes)
+    neighbours = get_neighbours(distance_matrix)
+    print(len(best_routes), best_distance)
+    
+#     if n_iter_fleet is None: n_iter_fleet=int(max(n_iter*0.1, 1))
+    if (n_iter_fleet is not None) and (n_iter_fleet > 0):
+        last_routes = fleet_min(n_iter_fleet, data, distance_matrix, neighbours, best_routes, verbose_step)
+        last_distance = get_routes_distance(distance_matrix, last_routes)
+
+        if last_distance<best_distance:
+            best_distance = last_distance
+            best_routes = last_routes
+        print(len(best_routes), best_distance)
+    temperature = init_T
+    
+    for i_iter in range(n_iter):
+        if obj_n_routes is not None and len(last_routes)>obj_n_routes and (i_iter+1)%fleet_gap==0:
+            current_routes = fleet_min(n_iter_fleet, data, distance_matrix, neighbours, last_routes, verbose_step)
+        else:
+            current_routes, absents = ruin(last_routes, neighbours)
+            current_routes = recreate(data, distance_matrix, current_routes, absents)
+        
+        current_distance = get_routes_distance(distance_matrix, current_routes)
+        if len(current_routes)<len(best_routes) or \
+           (current_distance<(last_distance-temperature*np.log(np.random.random())) and \
+            len(current_routes)<=len(best_routes)):
             
             if len(current_routes)<len(best_routes) or current_distance<best_distance:
                 best_distance = current_distance
