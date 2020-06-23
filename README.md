@@ -1,11 +1,15 @@
-# Travelling Salesman Problem (TSP) Solver Using Iterations
-Solving tsp (Travelling Salesman Problem) using ruin &amp; recreate （R &amp; R） method.
+# Vehicle Routing Problem (VRP) Solver
+Solving TSP (Travelling Salesman Problem) and VRP (Vehicle Routing Problem) using ruin &amp; recreate （R &amp; R） method.
 
 The following library is required to use the script:
 - Numpy
 
 The following library is required to plot the route:
 - Matplotlib
+
+## Update Jan 1st, 2020
+
+The solver is now able to solve capacitated vehicle routing problems with or without time windows (CVRP and CVRPTW). Check tester_cvrp.py and tester_vrp.py for details. Note that the problems should have the same layout as what in sample.txt.
 
 Example Code:
 
