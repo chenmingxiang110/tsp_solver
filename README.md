@@ -7,6 +7,10 @@ The following library is required to use the script:
 The following library is required to plot the route:
 - Matplotlib
 
+## Update June 30th, 2020
+
+Solvers based on Java is now available. This is much faster (a few hundred times faster for large scale problems) than what based on Python. An example notebook is provided. Please check the ./java folder for details.
+
 ## Update Jan 1st, 2020
 
 The solver is now able to solve capacitated vehicle routing problems with or without time windows (CVRP and CVRPTW). Check tester_cvrp.py and tester_vrp.py for details. Note that the problems should have the same layout as what in sample.txt.
