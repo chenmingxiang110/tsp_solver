@@ -1,5 +1,5 @@
 # Vehicle Routing Problem (VRP) Solver
-Solving TSP (Travelling Salesman Problem) and VRP (Vehicle Routing Problem) using ruin &amp; recreate （R &amp; R） method.
+Solving TSP (Travelling Salesman Problem) and VRP (Vehicle Routing Problem) using ruin &amp; recreate method.
 
 The following library is required to use the script:
 - Numpy
